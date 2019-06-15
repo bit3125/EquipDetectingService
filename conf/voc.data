@@ -1,0 +1,6 @@
+classes= 8
+train  = /diskb/lee/yolo/darknet/data/VOC2007/ImageSets/Main/train_absolute.txt
+valid  = /diskb/lee/yolo/darknet/data/VOC2007/ImageSets/Main/val_absolute.txt
+names = /diskb/lee/yolo/darknet/data/VOC2007/voc.names
+backup = /diskb/lee/yolo/darknet/data/VOC2007/backup/
+
