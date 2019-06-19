@@ -1,50 +1,57 @@
 import configparser
 from detector.Detector import Detector
+from constant.constant import CFG_FILE_PATH, RBTMQ_CFG_FILE_PATH
+from mq.rabbitmq import RabbitMQConnector
+import json
 
 
 class Server(object):
 
-    CFG_FILE_PATH = "conf/machine_room.cfg"  # 2brm
-
-    NET_CFG_PATH = None
-    NET_DATAFILE_PATH = None
-    NET_WEIGHTS_PATH = None
-    IMG_PATH = None
-
     detector = None
+    detect_request_queue = None
+    detect_main_response_queue = None
 
     def __init__(self):
-        self.init_cfg()
-        self.detector = Detector(self.NET_CFG_PATH, self.NET_WEIGHTS_PATH, self.NET_DATAFILE_PATH)
+        self.__init_detector()
+        self.__init_mq()
 
-    def init_cfg(self):
-        cfg_parser = configparser.ConfigParser()
-        cfg_parser.read(self.CFG_FILE_PATH)
+    def __init_detector(self):
+        cfgps = configparser.ConfigParser()
+        cfgps.read(CFG_FILE_PATH)
 
-        self.NET_CFG_PATH = str.encode(cfg_parser.get("cfg", "net_cfg_path"))
-        self.NET_DATAFILE_PATH = str.encode(cfg_parser.get("cfg", "net_datafile_path"))
-        self.NET_WEIGHTS_PATH = str.encode(cfg_parser.get("cfg", "net_weights_path"))
-        self.IMG_PATH = str.encode(cfg_parser.get("img", "img_path"))
-        # self.img_path = cfg_parser.get("img", "img_path")
+        net_cfg_path = str.encode(cfgps.get("cfg", "net_cfg_path"))
+        net_datafile_path = str.encode(cfgps.get("cfg", "net_datafile_path"))
+        net_weights_path = str.encode(cfgps.get("cfg", "net_weights_path"))
+        self.detector = Detector(net_cfg_path, net_weights_path, net_datafile_path)
+
+    def __init_mq(self):
+        cfgps = configparser.ConfigParser()
+        cfgps.read(RBTMQ_CFG_FILE_PATH)
+
+        self.detect_main_response_queue = RabbitMQConnector()
+        self.detect_main_response_queue.set_producer(exchange_name=cfgps.get("exchange", "exchange_name")
+                                                     , routing_key=cfgps.get("routing_key", "detect_main_response_queue"))
+
+        self.detect_request_queue = RabbitMQConnector()
+        self.detect_request_queue.set_consumer(queue_name=cfgps.get("queue", "detect_request_queue")
+                                               , on_message_callback=self.request_handler)  # self.request_handler)
 
     def run(self):
-        img_path = self.IMG_PATH
-        print(self.detect(img_path))
-        # TODO
-        '''
-        接下来只要在这里开发就好了，把消息队列接进来，
-        然后写一个死循环来阻塞式调用detect方法
-        '''
+        self.detect_request_queue.consume_run()
 
+    def request_handler(self, ch, method, properties, body):
+        # body type : bytes array
+        print("receive msg:{}".format(body))
 
-        # while True:
-        #     pass
+        req = json.loads(body)
 
-    def detect(self, img_path):
-        return self.detector.detect(img_path)
+        req_id = int(req["request_id"])
+        req_path = req["path"]
 
+        detect_map = self.detector.detect(req_path)  # list
+        detect_map["request_id"] = req_id
+        detect_map["path"] = req_path
 
-
-
-
-
+        resp = json.dumps(detect_map)
+        self.detect_main_response_queue.produce(resp)
+        ch.basic_ack(delivery_tag=method.delivery_tag)  # 发送ack消息

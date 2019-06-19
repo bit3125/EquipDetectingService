@@ -10,4 +10,16 @@ class Detector(object):
         self.meta = load_meta(net_datafile_path)
 
     def detect(self, img_path):
-        return detect(self.model, self.meta, img_path)
+        if isinstance(img_path, str):
+            img_path = str.encode(img_path)
+
+        downstream_ret = detect(self.model, self.meta, img_path)
+        if len(downstream_ret) == 0:
+            return None
+
+        downstream_ret = downstream_ret[0]
+        map = dict()
+        map["class"] = bytes.decode(downstream_ret[0]).strip()
+        map["confidence"] = downstream_ret[1]
+        map["box"] = downstream_ret[2]
+        return map
