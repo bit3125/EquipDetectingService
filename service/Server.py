@@ -44,14 +44,14 @@ class Server(object):
         print("receive msg:{}".format(body))
 
         req = json.loads(body)
-
         req_id = int(req["request_id"])
         req_path = req["path"]
 
-        detect_map = self.detector.detect(req_path)  # list
-        detect_map["request_id"] = req_id
-        detect_map["path"] = req_path
+        resp = dict()
+        resp["request_id"] = req_id
+        resp["path"] = req_path
+        resp["item_list"] = self.detector.detect(req_path)  # list
 
-        resp = json.dumps(detect_map)
-        self.detect_main_response_queue.produce(resp)
+        resp_json = json.dumps(resp)
+        self.detect_main_response_queue.produce(resp_json)
         ch.basic_ack(delivery_tag=method.delivery_tag)  # 发送ack消息
